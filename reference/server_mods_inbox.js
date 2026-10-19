@@ -92,5 +92,3 @@ export function startInbox({ dir, importFile, log = {}, tickMs = TICK_MS }) {
     },
   };
 }
-
-// 反例注入：故意让镜像与引擎仓不一致
