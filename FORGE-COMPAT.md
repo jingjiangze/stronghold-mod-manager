@@ -27,7 +27,27 @@
 - `server/plugins/forgeImport.js:361` — `fs.renameSync(path.join(stage, p.id), dest);`
 - `server/plugins/forgeImport.js:355` — `const dest = path.join(parent, p.id);`（parent = pluginsDir）
 
-## 3. 「兼容的 forge mod 加入 mod 仓库」——已具备 vs 仍缺
+## 3. 版本兼容（2026-10-21 新增）
+
+`pack.json` 的 `gameVersion` / `game` / `api` 过去只在 `forgeImport.js:1205` 的已知字段白名单里被静默跳过，
+产物的 `app` / `api` 又由 `manifestCommon()` 硬写（`forgeImport.js:2801`）。现在 `shared/plugins/compat.js`
+会读这三项并给出结构化判定；Forge 包仍然由 `importForge` 转换，判定只进报告，不改变导入行为。
+
+| status | 含义 | 出口 |
+|---|---|---|
+| `supported` | 声明范围覆盖当前版本 | `IMPORT-REPORT.md` 的「兼容」行与「兼容性」节；`/mod/upload`、`/mod/fetch`、`tools/mod.mjs check` 返回的 `compat` |
+| `convertible` | 声明范围不覆盖，但导入器会按现有映射转换 | 同上，附 `reasons`（`GAME_RANGE_MISMATCH` / `API_RANGE_MISMATCH` / `USES_NEWER_SURFACE`） |
+| `incompatible` | manifest 2 插件的 `api` 超出本安装，或 `app` 不覆盖（启用会被拒绝） | 同上 |
+| `unknown` | 没有声明，或声明不是可解析的版本范围 | 同上（`NO_GAME_RANGE` / `BAD_GAME_RANGE` / `NO_APP_RANGE`） |
+
+实测语料（mod 仓 75 个去重 id，2026-10-21）：`supported` 18 / `convertible` 37 / `unknown` 20。
+其中 4 个包声明了旧版本却使用 `server.modules`（duel-mode、watch-lineup、node-metrics-healthz、test-sim），
+会额外得到 `USES_NEWER_SURFACE`；`mod-xie` 未声明版本，只记录使用新字段。
+
+**它不做什么**：不改写 pack、不拒绝旧包、不把 `convertible` 当成失败。`convertible` 的含义是
+「装得上，玩法完整性需要验收」；`incompatible` 只用于 manifest 2 插件的启用门。
+
+## 4. 「兼容的 forge mod 加入 mod 仓库」——已具备 vs 仍缺
 
 ### 已可直接复用
 - `tools/mod.mjs pack`：把作者目录打成**确定性 zip**，字节稳定，可 pin SHA-256。
@@ -38,22 +58,44 @@
 ### 仍缺（属于托管仓库要补的）
 - **没有「mod 仓库」概念**：现有代码只负责「导入到本机 `plugins/`」，没有登记、索引、commit 步骤。
 - 无**版本语义**：只有 `force` 覆盖，没有语义化版本与取代关系。
-- 无**字段级转换正确性的对照测试**——现有 `test/mods/import.test.js` 只断言「落成了含 `plugin.json` 的目录」，
-  未断言 operators / chess / skills / voices 的映射是否完整。这是「加入仓库前能否相信它玩法全在」的缺口。
+- **字段级转换测试已在，且由引擎仓 CI 全量执行**：`test/plugins/forgeImport.test.js` 覆盖 operators / chess / skills / voices 映射，
+  `test/plugins/install.test.js` 覆盖 fetchHttps 与 ZIP 安全；引擎仓 `ci.yml` 的 "Unit & integration tests" 跑
+  `node --test "test/**/*.test.js"`，这些用例被削弱会红。
+  （`manager-integrity.yml` 在**规格仓**，只比对 `reference/` 与引擎仓的字节一致性；MAP 里列了哪些文件就只比哪些，
+  它是镜像闸门，不是测试闸门。）
 
-## 4. 测试覆盖缺口（重要，决定 CI 能拦什么）
+## 5. 测试覆盖（2026-10-21 补测后）
 
-`test/mods/import.test.js` 现有 6 个用例：
-sniff 分类与拒绝、Forge 包真实转换 + dryRun 不写盘、inbox 成功移到 `_done`、
-inbox 拒绝移到 `_failed` 带 reason、CLI pack 确定性 zip、`/mod` 只认自己的路径且页面自包含。
+跑法：`npm run test` = `node --test "test/**/*.test.js" "test/e2e/coop.e2e.mjs" "plugins/_template/**/*.test.js"`，
+引擎仓 `ci.yml` 的 "Unit & integration tests" 一步就是它。
 
-**未覆盖**：
-- `/mod/upload`、`/mod/fetch` 的 HTTP 层（网关/钥匙/同源/body 大小限制）
-- `installPluginBytes` 的拒绝码（SIZE / EXISTS / CHECK）
-- `fetchHttps` 的地址、协议、重定向规则
-- `importForge` 的字段级转换正确性
-- ZIP 炸弹 / 符号链接 / 路径穿越等安全校验
-- `keyOk` / `changeAllowed` / `studioAllowed` 的门失效路径
+### 这一轮补上的（此前零覆盖）
 
-⇒ 若要「CI 测试通过才进 mod 文件夹」，这些缺口就是闸门的漏洞面；
-建议至少把「拒绝码」与「门失效」两类补上，否则 CI 绿不代表 mod 可信。
+| 文件 | 覆盖 |
+|---|---|
+| `test/mods/http.test.js` | `/mod` 页面与 `status.json` 的读、写方法 405；`/mod/upload`：跨站 403、错钥匙 403、无钥匙 403、body 超限 413、非 zip 400、正确钥匙 200、二次上传 EXISTS 400、`force=1` 覆盖 200；`/mod/fetch`：跨站 403、错钥匙 403、非 JSON 400、缺 url 400、sha256 格式 400、非 https 目标 400（且一次 fetch 都没发）、摘要不符 400、下载到的不是 zip 400、正确摘要 200；公开地址与非本地 Host 一律 404 |
+| `test/mods/plugin-import.test.js` | `importArchive` 的 `kind === 'plugin'` 整条：dryRun 不写盘、成功安装、第二次 EXISTS、`force` 覆盖（旧目录进 `_replaced`）、坏 manifest 的 CHECK、`app` 越界判 `incompatible` 但仍装、`api` 越界判 `incompatible` 且被 CHECK 拒绝 |
+| `test/plugins/install-branches.test.js` | `installPluginBytes` 的 SIZE（`maxBytes`）、`expectedId` 不符、CHECK（坏 class）、无 `pluginsDir`、`plugins/_incoming` 是符号链接 |
+
+`test/mods/import.test.js` 的 6 个用例不动 —— 它同时是规格仓 `reference/` 的镜像文件，改它会连带 MAP。
+
+### 仍然缺
+
+- **`readPluginZip` 的坏 zip 分支**仍无样本：中央目录损坏、加密条目、数据描述符、非普通文件、重名、
+  坏目录项、不支持的压缩方法、本地头与中央头不一致、截断、解压尺寸不符、CRC 不符。
+  现有用例覆盖到的是：非 zip、条目数、单文件解压上限、符号链接、大小写折叠、本地 ZIP64。
+- `installPluginBytes` 的「末次 rename 失败」与 `movePluginAside` 的重名重试：要注入文件系统错误，尚未做。
+- `importArchive` 的「抛出的是非 `InstallError`」归一分支：没有稳定构造手法。
+- `/mod` 的 inbox 自动导入只有函数级用例（`startInbox`），没有 HTTP 侧。
+
+### 补测时发现的两个缺陷（未修，先记下）
+
+1. **`sniffArchive` 只认 zip 根目录的 `plugin.json` / `pack.json`。**
+   `tools/plugin.mjs pack --zip` 打的插件包是 `<id>/plugin.json`（`server/plugins/pack.js:317`，`name: ${id}/${rel}`），
+   于是 `/mod/upload` 会把这种包判成 `unknown`，回「zip 里既没有 pack.json 也没有 plugin.json」；
+   而 `installPluginBytes` 自己是接受这层外层目录的（`normalizeLayout`）。
+   `tools/mod.mjs pack`（Forge 包）打的是根级布局，所以只有插件包会踩到。
+   修法：在 `sniffArchive` 里加一条与 `stripWrapper` 同规则的「单层包裹目录」识别。
+2. **`/mod/status.json` 的 `inbox` 字段被覆盖。**
+   `server/mods/index.js` 先放 `inbox: inboxPath`，随后 `...statusRows(...)` 又返回一个同名的 `inbox`（计数），
+   把路径冲掉 —— 调用方拿到的永远是计数或 `null`，拿不到路径。

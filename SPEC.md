@@ -34,6 +34,21 @@ importArchive(buffer, { root, pluginsDir, dataDir, vanilla, force, dryRun })
 
 **上限：`PLUGIN_LIMITS.pluginBytes = 200 * 1024 * 1024`（200 MiB）**，出处 `shared/plugins/manifest.js:76`。
 
+## 3.1 兼容判定（2026-10-21）
+
+`importArchive()` 的返回值新增 `compat`：Forge 包由 `shared/plugins/compat.js` 的 `packCompatibility()` 读
+`pack.json` 的 `gameVersion` / `game` / `api`；插件包由 `pluginCompatibility()` 读 `plugin.json` 的 `app` / `api`。
+
+| status | 含义 |
+|---|---|
+| `supported` | 声明范围覆盖当前版本 |
+| `convertible` | 声明范围不覆盖，但导入器会转换（附 `reasons`） |
+| `incompatible` | manifest 2 的 `api` 超出本安装，或 `app` 不覆盖（启用会被拒绝） |
+| `unknown` | 未声明或声明不可解析 |
+
+`compat` 同时写进 `IMPORT-REPORT.md` 的「兼容」行与「兼容性」节；`/mod/upload`、`/mod/fetch`、`tools/mod.mjs check`
+的 JSON 返回值也带这个字段。判定不改变导入行为：Forge 包仍然转换，`convertible` 不是失败。
+
 ## 4. 三个入口
 
 - **页面**：`GET /mod`（自包含 HTML，内联脚本/样式，CSP 友好）；读不需钥匙，写需 `X-SP-Mod`。
