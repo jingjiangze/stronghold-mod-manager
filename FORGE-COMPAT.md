@@ -74,7 +74,7 @@
 | 文件 | 覆盖 |
 |---|---|
 | `test/mods/http.test.js` | `/mod` 页面与 `status.json` 的读、写方法 405；`/mod/upload`：跨站 403、错钥匙 403、无钥匙 403、body 超限 413、非 zip 400、正确钥匙 200、二次上传 EXISTS 400、`force=1` 覆盖 200；`/mod/fetch`：跨站 403、错钥匙 403、非 JSON 400、缺 url 400、sha256 格式 400、非 https 目标 400（且一次 fetch 都没发）、摘要不符 400、下载到的不是 zip 400、正确摘要 200；公开地址与非本地 Host 一律 404 |
-| `test/mods/plugin-import.test.js` | `importArchive` 的 `kind === 'plugin'` 整条：dryRun 不写盘、成功安装、第二次 EXISTS、`force` 覆盖（旧目录进 `_replaced`）、坏 manifest 的 CHECK、`app` 越界判 `incompatible` 但仍装、`api` 越界判 `incompatible` 且被 CHECK 拒绝 |
+| `test/mods/plugin-import.test.js` | `importArchive` 的 `kind === 'plugin'` 整条：dryRun 不写盘、成功安装、第二次 EXISTS、`force` 覆盖（旧目录进 `_replaced`）、坏 manifest 的 CHECK、`app` 越界判 `incompatible` 但仍装、`api` 越界判 `incompatible` 且被 CHECK 拒绝、**`<id>/plugin.json` 外层目录包也认成 plugin 且 verdict 照常读出** |
 | `test/plugins/install-branches.test.js` | `installPluginBytes` 的 SIZE（`maxBytes`）、`expectedId` 不符、CHECK（坏 class）、无 `pluginsDir`、`plugins/_incoming` 是符号链接 |
 
 `test/mods/import.test.js` 的 6 个用例不动 —— 它同时是规格仓 `reference/` 的镜像文件，改它会连带 MAP。
@@ -88,14 +88,20 @@
 - `importArchive` 的「抛出的是非 `InstallError`」归一分支：没有稳定构造手法。
 - `/mod` 的 inbox 自动导入只有函数级用例（`startInbox`），没有 HTTP 侧。
 
-### 补测时发现的两个缺陷（未修，先记下）
+### 补测时发现、已一并修掉的两个缺陷（2026-10-21）
 
-1. **`sniffArchive` 只认 zip 根目录的 `plugin.json` / `pack.json`。**
-   `tools/plugin.mjs pack --zip` 打的插件包是 `<id>/plugin.json`（`server/plugins/pack.js:317`，`name: ${id}/${rel}`），
-   于是 `/mod/upload` 会把这种包判成 `unknown`，回「zip 里既没有 pack.json 也没有 plugin.json」；
-   而 `installPluginBytes` 自己是接受这层外层目录的（`normalizeLayout`）。
-   `tools/mod.mjs pack`（Forge 包）打的是根级布局，所以只有插件包会踩到。
-   修法：在 `sniffArchive` 里加一条与 `stripWrapper` 同规则的「单层包裹目录」识别。
+1. **`sniffArchive` 只认 zip 根的 `plugin.json`。**
+   （`<id>/pack.json` 一直是好的——`readUntrustedZip` 内部已过 `stripWrapper`，那条规则只认 `pack.json`。）
+   `tools/plugin.mjs pack --zip` 打的插件包是 `<id>/plugin.json`（`server/plugins/pack.js`，`zipPlugin` 写 `${id}/${rel}`），
+   于是 `/mod/upload` 把管理器自己打的插件包判成 `unknown` 拒绝；而 `installPluginBytes` 自己是接受这层外层目录的。
+   **修法**：`server/mods/import.js` 新增 `stripPluginWrapper()` —— 单层唯一目录、且其下有 `plugin.json` 才拆。
+   拆完的 `files` 同时供 `sniffArchive` 判类与 `importArchive` 读 manifest 算 `compat`；
+   只判类不拆的话，这种包会「装得上但 `compat` 恒为 `null`」。
+   边界：两层嵌套（`a/b/plugin.json`）仍判 `unknown`，这是这条规则有意不碰的。
 2. **`/mod/status.json` 的 `inbox` 字段被覆盖。**
-   `server/mods/index.js` 先放 `inbox: inboxPath`，随后 `...statusRows(...)` 又返回一个同名的 `inbox`（计数），
-   把路径冲掉 —— 调用方拿到的永远是计数或 `null`，拿不到路径。
+   计数改名 `inboxCount`，`inbox` 保留为路径；同时把计数改成数**管理器真正监听的收件目录**
+   （原来数的是 `dirname(pluginsDir)/mod-inbox`，与 `inboxDir` 不一致时数的是另一个目录）。
+
+两条都在测试里钉住了：`plugin-import.test.js` 有 wrapped 包用例（含 dryRun 的 verdict），
+`http.test.js` 断言 `inbox` 是路径、`inboxCount` 是数字或 `null`。
+`server/mods/import.js` 与 `server/mods/index.js` 都在规格仓的镜像 MAP 内，`reference/` 已同步。
