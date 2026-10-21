@@ -1,7 +1,7 @@
 # stronghold-mod-manager — MOD 管理器的规格与闸门仓库
 
 **这不是一个可直接 `npm start` 的服务。** 它是 MOD 管理器的**规格、来源镜像与 CI 闸门**仓库；
-可运行的产物由 `jingjiangze/Stronghold-Protocol-Forge`（0.3.1 产品线分支 `master`）用
+可运行的产物由 `jingjiangze/Stronghold-Protocol-Forge`（`master`，当前 0.3.2）用
 `tools/package.mjs --lite` 产出。
 
 ## 为什么这么拆
