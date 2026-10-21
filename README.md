@@ -1,7 +1,7 @@
 # stronghold-mod-manager — MOD 管理器的规格与闸门仓库
 
 **这不是一个可直接 `npm start` 的服务。** 它是 MOD 管理器的**规格、来源镜像与 CI 闸门**仓库；
-可运行的产物由 `jingjiangze/Stronghold-Protocol-Forge`（0.3.1 产品线分支 `feat/mota-coop-upstream`）用
+可运行的产物由 `jingjiangze/Stronghold-Protocol-Forge`（0.3.1 产品线分支 `master`）用
 `tools/package.mjs --lite` 产出。
 
 ## 为什么这么拆
@@ -61,6 +61,6 @@ zip ──┬─ 有 pack.json   → importForge()        （Forge 包 → 普�
 
 ## 相关仓库
 
-- `jingjiangze/Stronghold-Protocol-Forge` — 引擎 + 管理器本体（产品线分支 `feat/mota-coop-upstream`）
+- `jingjiangze/Stronghold-Protocol-Forge` — 引擎 + 管理器本体（产品线分支 `master`）
 - `jingjiangze/Stronghold-Protocol-Forge-Mods` — 既有的 mod 托管仓（fork，含 `mods/`、`site/`）
 - `sganggs/Stronghold-Protocol` — 游戏本体上游（管理器的祖先，merge-base `b3deebda`）

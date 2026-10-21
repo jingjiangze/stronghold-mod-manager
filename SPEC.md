@@ -1,6 +1,6 @@
 # MOD 管理器规格（0.3.1 底座）
 
-本文件是**规格真源**。实现在 `jingjiangze/Stronghold-Protocol-Forge` 的 `feat/mota-coop-upstream` 分支；
+本文件是**规格真源**。实现在 `jingjiangze/Stronghold-Protocol-Forge` 的 `master` 分支（0.3.1 产品线）；
 本仓的 `reference/` 只是镜像。两者不一致时以引擎仓为准，并由 `manager-integrity.yml` 报红。
 
 ## 1. 唯一分派点

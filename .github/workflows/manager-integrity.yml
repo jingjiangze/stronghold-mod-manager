@@ -1,7 +1,7 @@
 name: 管理器规格与镜像一致性
 
 # 本仓不运行管理器，只守住两件事：
-#   1. reference/ 下的镜像与引擎仓（feat/mota-coop-upstream）的实际文件**字节一致**；
+#   1. reference/ 下的镜像与引擎仓（master）的实际文件**字节一致**；
 #   2. README / SPEC / FORGE-COMPAT 里写死的判据（行数、拒绝码、上限、错误码）
 #      与真实文件**不脱节**。
 #
@@ -31,7 +31,7 @@ concurrency:
 
 env:
   ENGINE_REPO: jingjiangze/Stronghold-Protocol-Forge
-  ENGINE_REF: feat/mota-coop-upstream
+  ENGINE_REF: master
 
 jobs:
   mirror:
