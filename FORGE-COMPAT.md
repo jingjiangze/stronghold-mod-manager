@@ -105,3 +105,20 @@
 两条都在测试里钉住了：`plugin-import.test.js` 有 wrapped 包用例（含 dryRun 的 verdict），
 `http.test.js` 断言 `inbox` 是路径、`inboxCount` 是数字或 `null`。
 `server/mods/import.js` 与 `server/mods/index.js` 都在规格仓的镜像 MAP 内，`reference/` 已同步。
+## 6. 实战案例：versus（2V2 对抗，trusted + modes + meta.code）
+
+`versus` 0.1.0 是第一个走完管理器全链路的 **trusted 类玩法插件**：
+
+| 面 | 用法 | 证据 |
+|---|---|---|
+| `modes` part | `mode_x_versus_2v2`（base `mode_multi_normal`，14 回合） | `data/modes.json` |
+| `meta.code` entry | `global:versus-mode`（R14 公告钩子） | `server/meta.js` |
+| `trusted.server` entry | `host/noop.js` | `entry.server` |
+| settings | `teamSize` / `confrontTargetSeconds` / `rosterMs` | `plugin.json` settings 块 |
+| lock + pin | `tools/plugin.mjs pack` → sha256 pin | `plugin.lock.json` + `plugins/config.json` |
+| 兼容判定 | `packCompatibility({gameVersion:'0.3.x'})` → `supported` | `shared/plugins/compat.js` |
+| 服务器装载 | `/plugins/index.json` → `status: "loaded"`, `class: "trusted"` | 本机实测 |
+
+这条链验证了管理器对「带自定义模式的完整玩法插件」的装载能力：modes 进 content set、meta 钩子进对局、settings 暴露在管理面板、lock+pin 走 trusted 信任链。
+
+⚠ versus 的对抗期核心（confront 状态机、共享血量、Boss 池）在引擎侧 `gpt/versus-constants` 分支，尚未合并 master；当前插件装载后模式可选但对抗逻辑不生效。
